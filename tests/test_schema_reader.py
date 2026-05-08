@@ -74,3 +74,9 @@ def test_read_specific_table(engine):
     metas = SchemaReader().read_tables(engine, ["users"])
     assert len(metas) == 1
     assert metas[0].name == "users"
+
+
+def test_read_tables_no_names_returns_all(engine):
+    """names=None → inspector.get_table_names() 경로 실행."""
+    metas = SchemaReader().read_tables(engine, None)
+    assert len(metas) >= 2

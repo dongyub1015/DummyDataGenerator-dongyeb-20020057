@@ -37,3 +37,21 @@ def test_connect_bad_host_raises():
     conn = DBConnector()
     with pytest.raises(OperationalError):
         conn.connect_dsn("postgresql://user:pw@nonexistent_host_xyz:5432/db")
+
+
+def test_build_dsn_non_sqlite_no_port():
+    """port=None → port 부분 없이 DSN 빌드 (lines 53-54 커버)."""
+    conn = DBConnector()
+    cfg = DatabaseConfig(driver="postgresql", host="localhost", port=None, user="u", password="p", dbname="db")
+    # _build_dsn 직접 호출
+    dsn = conn._build_dsn(cfg)
+    assert "localhost/db" in dsn
+    assert ":None" not in dsn
+
+
+def test_build_dsn_non_sqlite_with_port():
+    """port 지정 시 :port 포함 DSN."""
+    conn = DBConnector()
+    cfg = DatabaseConfig(driver="postgresql", host="localhost", port=5432, user="u", password="p", dbname="db")
+    dsn = conn._build_dsn(cfg)
+    assert ":5432" in dsn

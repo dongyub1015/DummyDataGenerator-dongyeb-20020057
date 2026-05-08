@@ -6,7 +6,7 @@ from typing import Any
 
 class BaseStrategy(ABC):
 
-    def seed(self, value: int) -> None:
+    def seed(self, value: int) -> None:  # pragma: no cover
         pass
 
     @abstractmethod

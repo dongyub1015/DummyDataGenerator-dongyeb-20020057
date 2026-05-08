@@ -100,3 +100,16 @@ def test_default_port_assigned():
           dbname: db
     """)
     assert cfg.database.port == 5432
+
+
+def test_load_from_dict():
+    from dummy_gen.config.loader import ConfigLoader
+    data = {
+        "database": {"driver": "sqlite", "dbname": "x.db"},
+        "generation": {"seed": 7},
+        "tables": [{"name": "t", "rows": 3}],
+    }
+    cfg = ConfigLoader().load_from_dict(data)
+    assert cfg.database.dbname == "x.db"
+    assert cfg.generation.seed == 7
+    assert cfg.tables[0].name == "t"

@@ -1,3 +1,3 @@
-from dummy_gen.cli import app
+from dummy_gen.cli import app  # pragma: no cover
 
-app()
+app()  # pragma: no cover

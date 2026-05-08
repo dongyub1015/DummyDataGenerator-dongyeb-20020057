@@ -1,3 +1,4 @@
+import json
 import pytest
 
 from dummy_gen.generator.random_strategy import (
@@ -8,6 +9,7 @@ from dummy_gen.generator.random_strategy import (
     FloatStrategy,
     IntStrategy,
     JsonStrategy,
+    TextStrategy,
     UUIDStrategy,
     VarcharStrategy,
 )
@@ -94,3 +96,70 @@ def test_unique_wrapper_raises_on_exhaustion():
     with pytest.raises(RuntimeError, match="UNIQUE"):
         for _ in range(4):
             wrapper.generate()
+
+
+def test_unique_wrapper_reset():
+    inner = IntStrategy(min_val=1, max_val=5)
+    wrapper = UniqueWrapper(inner, max_rows=5)
+    for _ in range(5):
+        wrapper.generate()
+    wrapper.reset()
+    val = wrapper.generate()
+    assert 1 <= val <= 5
+
+
+def test_text_strategy_seed_and_generate():
+    s = TextStrategy()
+    s.seed(7)
+    v = s.generate()
+    assert isinstance(v, str)
+    assert len(v.split()) >= 5
+
+
+def test_bool_strategy_seed():
+    s = BoolStrategy()
+    s.seed(1)
+    results = [s.generate() for _ in range(20)]
+    assert set(results) <= {True, False}
+
+
+def test_date_strategy_seed():
+    s = DateStrategy()
+    s.seed(99)
+    v = s.generate()
+    from datetime import date
+    assert isinstance(v, date)
+
+
+def test_datetime_strategy_seed_and_generate():
+    from datetime import datetime
+    s = DatetimeStrategy(start="2022-01-01", end="2022-12-31")
+    s.seed(5)
+    v = s.generate()
+    assert isinstance(v, datetime)
+    assert v.year == 2022
+
+
+def test_json_strategy_seed_and_generate():
+    s = JsonStrategy()
+    s.seed(3)
+    v = s.generate()
+    parsed = json.loads(v)
+    assert isinstance(parsed, dict)
+    assert len(parsed) >= 1
+
+
+def test_enum_strategy_seed():
+    s = EnumStrategy(["x", "y", "z"])
+    s.seed(10)
+    for _ in range(20):
+        assert s.generate() in ["x", "y", "z"]
+
+
+def test_unique_wrapper_seed():
+    """UniqueWrapper.seed() 가 내부 strategy에 시드를 전달한다."""
+    inner = IntStrategy(1, 1000)
+    wrapper = UniqueWrapper(inner, max_rows=100)
+    wrapper.seed(55)
+    v = wrapper.generate()
+    assert 1 <= v <= 1000

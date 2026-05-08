@@ -67,3 +67,73 @@ def test_insert_elapsed(engine):
 def test_empty_rows(engine):
     result = BatchInserter().insert(engine, "items", [])
     assert result.inserted == 0
+
+
+def test_batch_failure_counted(engine):
+    # id 중복 → UNIQUE 위반으로 배치 실패 유도
+    rows_ok = _make_rows(3)
+    rows_dup = [{"id": 1, "name": "dup", "value": 0.0}]  # id=1 중복
+    inserter = BatchInserter()
+    inserter.insert(engine, "items", rows_ok, batch_size=10)
+    result = inserter.insert(engine, "items", rows_dup, batch_size=10)
+    assert result.failed == 1
+    assert len(result.errors) == 1
+    assert not result.success
+
+
+def test_disable_fk_sqlite(engine):
+    # SQLite에서 FK 비활성화/재활성화 토글 경로 실행
+    result = BatchInserter().insert(
+        engine, "items", _make_rows(3), disable_fk=True
+    )
+    assert result.inserted == 3
+
+
+def _sql_text(mock_conn) -> str:
+    """MagicMock conn.execute에 전달된 TextClause의 SQL 문자열 반환."""
+    clause = mock_conn.execute.call_args[0][0]
+    return str(clause)
+
+
+def test_truncate_generic_dialect():
+    from unittest.mock import MagicMock
+    inserter = BatchInserter()
+    conn = MagicMock()
+    inserter._truncate(conn, "items", "mysql")
+    conn.execute.assert_called_once()
+    assert "TRUNCATE" in _sql_text(conn)
+
+
+def test_truncate_postgresql():
+    from unittest.mock import MagicMock
+    inserter = BatchInserter()
+    conn = MagicMock()
+    inserter._truncate(conn, "items", "postgresql")
+    conn.execute.assert_called_once()
+    assert "RESTART IDENTITY" in _sql_text(conn)
+
+
+def test_toggle_fk_sqlite():
+    from unittest.mock import MagicMock
+    inserter = BatchInserter()
+    conn = MagicMock()
+    inserter._toggle_fk(conn, "sqlite", enable=False)
+    conn.execute.assert_called_once()
+    assert "foreign_keys" in _sql_text(conn).lower()
+
+
+def test_toggle_fk_postgresql_enable():
+    from unittest.mock import MagicMock
+    inserter = BatchInserter()
+    conn = MagicMock()
+    inserter._toggle_fk(conn, "postgresql", enable=True)
+    conn.execute.assert_called_once()
+    assert "DEFAULT" in _sql_text(conn)
+
+
+def test_toggle_fk_unknown_dialect_no_op():
+    from unittest.mock import MagicMock
+    inserter = BatchInserter()
+    conn = MagicMock()
+    inserter._toggle_fk(conn, "oracle_unknown", enable=True)
+    conn.execute.assert_not_called()

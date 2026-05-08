@@ -79,3 +79,102 @@ def test_fk_pool_injection(engine):
             "SELECT COUNT(*) FROM orders WHERE user_id NOT IN (SELECT id FROM users)"
         )).scalar()
     assert invalid == 0
+
+
+def test_fk_inject_pool_from_generated_rows():
+    """PK를 rows에 직접 포함(autoincrement 설정)하면 inject_pool 경로가 실행된다."""
+    from dummy_gen.config.models import ColumnConfig
+
+    e = create_engine("sqlite:///:memory:")
+    with e.begin() as conn:
+        conn.execute(text("CREATE TABLE parent (id INTEGER PRIMARY KEY, val TEXT)"))
+        conn.execute(text("CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id))"))
+
+    config = AppConfig(
+        database=DatabaseConfig(driver="sqlite", dbname=":memory:"),
+        generation=GenerationConfig(seed=1, batch_size=50),
+        tables=[
+            TableConfig(
+                name="parent",
+                rows=3,
+                columns={
+                    "id": ColumnConfig(strategy="autoincrement"),
+                    "val": ColumnConfig(strategy="fixed", value="x"),
+                },
+            ),
+            TableConfig(name="child", rows=5, columns={"id": ColumnConfig(strategy="autoincrement")}),
+        ],
+    )
+    results = Orchestrator().run(e, config)
+    assert results[0].table == "parent"
+    assert results[0].inserted == 3
+    assert results[1].inserted == 5
+    e.dispose()
+
+
+def test_cyclic_fk_with_disable_fk():
+    """순환 FK가 있고 disable_fk=True이면 경고 후 진행."""
+    e = create_engine("sqlite:///:memory:")
+    with e.begin() as conn:
+        conn.execute(text("PRAGMA foreign_keys = OFF"))
+        conn.execute(text("CREATE TABLE a (id INTEGER PRIMARY KEY, b_id INTEGER)"))
+        conn.execute(text("CREATE TABLE b (id INTEGER PRIMARY KEY, a_id INTEGER)"))
+
+    from dummy_gen.config.models import GenerationConfig as GC
+    config = AppConfig(
+        database=DatabaseConfig(driver="sqlite", dbname=":memory:"),
+        generation=GC(seed=1, batch_size=50, disable_fk=True),
+        tables=[
+            TableConfig(name="a", rows=2),
+            TableConfig(name="b", rows=2),
+        ],
+    )
+    from dummy_gen.schema.models import FKRelation, TableMeta, ColumnMeta, ColumnKind
+    from sqlalchemy import types as t
+
+    orch = Orchestrator()
+    a_meta = TableMeta(
+        name="a", columns=[
+            ColumnMeta("id", "INTEGER", t.Integer(), False, None, ColumnKind.PK),
+            ColumnMeta("b_id", "INTEGER", t.Integer(), True, None, ColumnKind.FK,
+                       fk=FKRelation("b_id", "b", "id")),
+        ],
+        pk_columns=["id"],
+        unique_constraints=[],
+        fk_relations=[FKRelation("b_id", "b", "id")],
+    )
+    b_meta = TableMeta(
+        name="b", columns=[
+            ColumnMeta("id", "INTEGER", t.Integer(), False, None, ColumnKind.PK),
+            ColumnMeta("a_id", "INTEGER", t.Integer(), True, None, ColumnKind.FK,
+                       fk=FKRelation("a_id", "a", "id")),
+        ],
+        pk_columns=["id"],
+        unique_constraints=[],
+        fk_relations=[FKRelation("a_id", "a", "id")],
+    )
+    order = orch._topological_sort([a_meta, b_meta], disable_fk=True)
+    assert set(order) == {"a", "b"}
+    e.dispose()
+
+
+def test_cyclic_fk_without_disable_fk_raises():
+    """순환 FK가 있고 disable_fk=False이면 RuntimeError."""
+    from dummy_gen.schema.models import FKRelation, TableMeta, ColumnMeta, ColumnKind
+    from sqlalchemy import types as t
+
+    orch = Orchestrator()
+    a_meta = TableMeta(
+        name="a", columns=[],
+        pk_columns=["id"],
+        unique_constraints=[],
+        fk_relations=[FKRelation("b_id", "b", "id")],
+    )
+    b_meta = TableMeta(
+        name="b", columns=[],
+        pk_columns=["id"],
+        unique_constraints=[],
+        fk_relations=[FKRelation("a_id", "a", "id")],
+    )
+    with pytest.raises(RuntimeError, match="순환 FK"):
+        orch._topological_sort([a_meta, b_meta], disable_fk=False)

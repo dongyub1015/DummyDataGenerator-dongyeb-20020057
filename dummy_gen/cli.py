@@ -153,15 +153,16 @@ def cmd_schema(
     table: list[str] = typer.Option([], "--table"),
     fmt: str = typer.Option("table", "--format"),
 ) -> None:
+    if not config and not dsn:
+        console.print("[red]--config or --dsn required[/red]")
+        raise typer.Exit(3)
+
     try:
         if config:
             app_cfg = _loader.load(config)
             engine = _connector.connect(app_cfg.database)
-        elif dsn:
-            engine = _connector.connect_dsn(dsn)
         else:
-            console.print("[red]--config or --dsn required[/red]")
-            raise typer.Exit(3)
+            engine = _connector.connect_dsn(dsn)
     except Exception as exc:
         console.print(f"[red][Error][/red] {exc}")
         raise typer.Exit(2)
@@ -393,5 +394,5 @@ def _print_summary(results: list[InsertResult]) -> None:
     console.print(t)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     app()
