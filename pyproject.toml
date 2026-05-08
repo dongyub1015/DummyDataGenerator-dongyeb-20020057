@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dummy-data-generator"
+version = "0.1.0"
+description = "테스트용 더미 데이터를 생성하고 DB에 삽입하는 CLI 도구"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "typer>=0.12",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "faker>=24.0",
+    "rstr>=3.2",
+]
+
+[project.optional-dependencies]
+postgresql = ["psycopg2-binary>=2.9"]
+mysql      = ["pymysql>=1.1"]
+mssql      = ["pyodbc>=5.0"]
+all        = ["psycopg2-binary>=2.9", "pymysql>=1.1", "pyodbc>=5.0"]
+dev        = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "psycopg2-binary>=2.9",
+    "pymysql>=1.1",
+]
+
+[project.scripts]
+dummy-gen = "dummy_gen.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dummy_gen*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers   = ["mssql: MSSQL Docker 환경 필요"]
+
+[tool.coverage.run]
+source = ["dummy_gen"]
+omit   = ["tests/*"]
