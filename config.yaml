@@ -1,0 +1,46 @@
+database:
+  driver: sqlite
+  dbname: dev.db
+
+generation:
+  seed: 42
+  locale: ko_KR
+  batch_size: 1000
+  mode: append
+  disable_fk: false
+
+tables:
+  - name: users
+    rows: 5000
+    columns:
+      name:
+        strategy: faker
+        faker_provider: name
+      email:
+        strategy: faker
+        faker_provider: email
+        unique: true
+      age:
+        strategy: random_int
+        min: 18
+        max: 80
+      created_at:
+        strategy: random_datetime
+        start: "2020-01-01"
+        end: "2026-01-01"
+
+  - name: orders
+    rows: 20000
+    columns:
+      user_id:
+        strategy: foreign_key
+        reference_table: users
+        reference_column: id
+      amount:
+        strategy: random_float
+        min: 1000.0
+        max: 500000.0
+        decimal_places: 2
+      status:
+        strategy: choice
+        values: ["pending", "paid", "cancelled", "refunded"]
